@@ -7,6 +7,7 @@ import { type SongLyric } from "@/types/lyric";
 import { isElectron } from "@/utils/env";
 import { stripLyricMetadata } from "@/utils/lyricStripper";
 import { type LyricLine, parseLrc, parseTTML, parseYrc } from "@applemusic-like-lyrics/lyric";
+import { parseSmartLrc, isWordLevelFormat } from "@/utils/lyricParser";
 import { escapeRegExp, isEmpty } from "lodash-es";
 import { SongType } from "@/types/main";
 
@@ -217,8 +218,13 @@ class LyricManager {
       let lrcLines = parseLrc(data.lrc) || [];
       // 处理翻译
       if (data.trans) {
-        const transLines = parseLrc(data.trans);
+        let transLines = parseLrc(data.trans);
         if (transLines?.length) {
+          // 过滤包含 "//" 或 "作品的著作权" 的翻译行
+          transLines = transLines.filter((line) => {
+            const text = line.words.map((w) => w.word).join("");
+            return !text.includes("//") && !text.includes("作品的著作权");
+          });
           lrcLines = this.alignLyrics(lrcLines, transLines, "translatedLyric");
         }
       }
@@ -341,8 +347,13 @@ class LyricManager {
     // 处理翻译
     let result = lines;
     if (trans) {
-      const transLines = parseLrc(trans);
+      let transLines = parseLrc(trans);
       if (transLines?.length) {
+        // 过滤包含 "//" 或 "作品的著作权" 的翻译行
+        transLines = transLines.filter((line) => {
+          const text = line.words.map((w) => w.word).join("");
+          return !text.includes("//") && !text.includes("作品的著作权");
+        });
         result = this.alignLyrics(result, transLines, "translatedLyric");
       }
     }
@@ -405,7 +416,8 @@ class LyricManager {
       }
       if (isStale()) return;
       if (!ttmlContent || typeof ttmlContent !== "string") return;
-      const parsed = parseTTML(ttmlContent);
+      const sorted = this.sortTTMLTranslations(ttmlContent);
+      const parsed = parseTTML(sorted);
       const lines = parsed?.lines || [];
       if (!lines.length) return;
       result.yrcData = lines;
@@ -488,14 +500,21 @@ class LyricManager {
       if (!lyric) return { lrcData: [], yrcData: [] };
       // TTML 直接返回
       if (format === "ttml") {
-        const ttml = parseTTML(lyric);
+        const sorted = this.sortTTMLTranslations(lyric);
+        const ttml = parseTTML(sorted);
         const lines = ttml?.lines || [];
         statusStore.usingTTMLLyric = true;
         return { lrcData: [], yrcData: lines };
       }
-      // 解析本地歌词
-      const lrcLines = parseLrc(lyric);
-      let aligned = this.alignLocalLyrics({ lrcData: lrcLines, yrcData: [] });
+      // 解析本地歌词（智能识别格式）
+      const { format: lrcFormat, lines: parsedLines } = parseSmartLrc(lyric);
+      // 如果是逐字格式，直接作为 yrcData
+      if (isWordLevelFormat(lrcFormat)) {
+        statusStore.usingTTMLLyric = false;
+        return { lrcData: [], yrcData: parsedLines };
+      }
+      // 普通格式，继续原有逻辑
+      let aligned = this.alignLocalLyrics({ lrcData: parsedLines, yrcData: [] });
       statusStore.usingTTMLLyric = false;
       // 如果开启了本地歌曲 QQ 音乐匹配，尝试获取逐字歌词
       if (settingStore.localLyricQQMusicMatch && musicStore.playSong) {
@@ -512,6 +531,55 @@ class LyricManager {
     } catch {
       return { lrcData: [], yrcData: [] };
     }
+  }
+
+  /**
+   * 处理 TTML 内容并排序翻译
+   * @param ttmlContent 原始 TTML 内容
+   * @param translationOrder 翻译排序顺序
+   * @returns 排序后的 TTML 内容
+   */
+  // 此函数应该在 AMLL 的 TTML 解析器支持多语言翻译后删除
+  private sortTTMLTranslations(
+    ttmlContent: string,
+    translationOrder: string[] = ["zh-CN", "zh-Hans", "zh-TW", "zh-Hant"],
+  ): string {
+    // 使用 DOMParser 解析 XML 内容
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(ttmlContent, "text/xml");
+
+    // 查找所有歌词行元素
+    const lyricsElements = xmlDoc.querySelectorAll("tt > body > div > p");
+
+    lyricsElements.forEach((element: Element) => {
+      // 获取当前歌词行的所有翻译元素
+      const translationElements = Array.from(element.children).filter(
+        (child) =>
+          child.hasAttribute("ttm:role") && child.getAttribute("ttm:role") === "x-translation",
+      );
+
+      // 按照指定顺序对翻译进行排序
+      // 按照指定顺序对翻译进行排序
+      translationElements.sort((a, b) => {
+        const aLang = (a.getAttribute("xml:lang") || a.getAttribute("lang") || "").toLowerCase();
+        const bLang = (b.getAttribute("xml:lang") || b.getAttribute("lang") || "").toLowerCase();
+
+        const aIndex = translationOrder.findIndex((lang) => aLang.startsWith(lang.toLowerCase()));
+        const bIndex = translationOrder.findIndex((lang) => bLang.startsWith(lang.toLowerCase()));
+
+        // 如果找不到指定语言，则放在最后
+        return (aIndex === -1 ? Infinity : aIndex) - (bIndex === -1 ? Infinity : bIndex);
+      });
+
+      // 重新排列翻译元素
+      translationElements.forEach((translationElement) => {
+        element.appendChild(translationElement); // 移动到末尾以实现排序
+      });
+    });
+
+    // 序列化回字符串
+    const serializer = new XMLSerializer();
+    return serializer.serializeToString(xmlDoc);
   }
 
   /**
@@ -534,20 +602,23 @@ class LyricManager {
         id,
       );
       statusStore.usingTTMLLyric = Boolean(ttml);
-      let lrcLines: LyricLine[] = [];
-      let ttmlLines: LyricLine[] = [];
       // 安全解析 LRC
+      let lrcLines: LyricLine[] = [];
+      let lrcIsWordLevel = false;
       try {
         const lrcContent = typeof lrc === "string" ? lrc : "";
         if (lrcContent) {
-          lrcLines = parseLrc(lrcContent);
-          console.log("检测到本地歌词覆盖", lrcLines);
+          const { format: lrcFormat, lines } = parseSmartLrc(lrcContent);
+          lrcIsWordLevel = isWordLevelFormat(lrcFormat);
+          lrcLines = lines;
+          console.log("检测到本地歌词覆盖", lrcFormat, lrcLines);
         }
       } catch (err) {
         console.error("parseLrc 本地解析失败:", err);
         lrcLines = [];
       }
       // 安全解析 TTML
+      let ttmlLines: LyricLine[] = [];
       try {
         const ttmlContent = typeof ttml === "string" ? ttml : "";
         if (ttmlContent) {
@@ -558,6 +629,9 @@ class LyricManager {
         console.error("parseTTML 本地解析失败:", err);
         statusStore.usingTTMLLyric = false;
         ttmlLines = [];
+      }
+      if (lrcIsWordLevel && lrcLines.length > 0) {
+        return { lrcData: [], yrcData: lrcLines };
       }
       return { lrcData: lrcLines, yrcData: ttmlLines };
     } catch (error) {
