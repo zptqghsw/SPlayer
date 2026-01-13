@@ -23,8 +23,9 @@
         :hidePassedLines="settingStore.hidePassedLines"
         :wordFadeWidth="settingStore.wordFadeWidth"
         :style="{
+          '--display-count-down-show': settingStore.countDownShow ? 'flex' : 'none',
           '--amll-lp-font-size': settingStore.lyricFontSize + 'px',
-          'font-weight': settingStore.lyricFontBold ? 'bold' : 'normal',
+          'font-weight': settingStore.lyricFontWeight,
           'font-family': settingStore.LyricFont !== 'follow' ? settingStore.LyricFont : '',
           ...lyricLangFontStyle(settingStore),
         }"
@@ -38,13 +39,11 @@
 </template>
 
 <script setup lang="ts">
-import { LyricPlayer } from "@applemusic-like-lyrics/vue";
 import { type LyricLine } from "@applemusic-like-lyrics/core";
 import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { getLyricLanguage } from "@/utils/format";
 import { usePlayerController } from "@/core/player/PlayerController";
 import { cloneDeep } from "lodash-es";
-import "@applemusic-like-lyrics/core/style.css";
 import { lyricLangFontStyle } from "@/utils/lyricFontConfig";
 
 const musicStore = useMusicStore();
@@ -88,7 +87,7 @@ const amLyricsData = computed(() => {
       if (!showTran) line.translatedLyric = "";
       if (!showRoma) line.romanLyric = "";
       if (!showWordsRoma) line.words.forEach((word) => (word.romanWord = ""));
-    })
+    });
   }
 
   return clonedLyrics;
@@ -166,6 +165,12 @@ onBeforeUnmount(() => {
     top: 0;
     padding-left: 10px;
     padding-right: 80px;
+
+    div {
+      div[class^="_interludeDots"] {
+        display: var(--display-count-down-show);
+      }
+    }
   }
 
   &.pure {

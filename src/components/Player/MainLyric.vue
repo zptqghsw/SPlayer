@@ -5,7 +5,7 @@
       '--lrc-size': settingStore.lyricFontSize + 'px',
       '--lrc-tran-size': settingStore.lyricTranFontSize + 'px',
       '--lrc-roma-size': settingStore.lyricRomaFontSize + 'px',
-      '--lrc-bold': settingStore.lyricFontBold ? 'bold' : 'normal',
+      '--lrc-bold': settingStore.lyricFontWeight,
       'font-family': settingStore.LyricFont !== 'follow' ? settingStore.LyricFont : '',
       cursor: statusStore.playerMetaShow ? 'auto' : 'none',
       ...lyricLangFontStyle(settingStore),
@@ -158,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-import { LyricWord } from "@applemusic-like-lyrics/lyric";
+import { type LyricWord } from "@applemusic-like-lyrics/lyric";
 import { NScrollbar } from "naive-ui";
 import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { usePlayerController } from "@/core/player/PlayerController";

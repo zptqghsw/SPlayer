@@ -57,8 +57,8 @@ export interface SettingState {
   lyricTranFontSize: number;
   /** 歌词音译字体大小 */
   lyricRomaFontSize: number;
-  /** 歌词字体加粗 */
-  lyricFontBold: boolean;
+  /** 歌词字重设置 */
+  lyricFontWeight: number;
   /** 显示逐字歌词 */
   showYrc: boolean;
   /** 显示逐字歌词动画 */
@@ -163,10 +163,8 @@ export interface SettingState {
   showPlaylistCount: boolean;
   /** 是否显示音乐频谱 */
   showSpectrums: boolean;
-  /** 是否开启 SMTC */
+  /** 是否开启系统音频集成 */
   smtcOpen: boolean;
-  /** 是否开启原生 SMTC 支持 (Windows) */
-  enableNativeSmtc: boolean;
   /** 歌词模糊 */
   lyricsBlur: boolean;
   /** 鼠标悬停暂停 */
@@ -310,6 +308,12 @@ export interface SettingState {
     /** 显示模式 */
     displayMode: "name" | "state" | "details";
   };
+  /** 播放引擎 */
+  playbackEngine: "web-audio" | "mpv";
+  /** 自定义 CSS */
+  customCss: string;
+  /** 自定义 JS */
+  customJs: string;
 }
 
 export const useSettingStore = defineStore("setting", {
@@ -369,14 +373,13 @@ export const useSettingStore = defineStore("setting", {
     showPlaylistCount: true,
     showSpectrums: false,
     smtcOpen: true,
-    enableNativeSmtc: true,
     playSongDemo: false,
     scrobbleSong: false,
     dynamicCover: false,
     lyricFontSize: 46,
     lyricTranFontSize: 22,
     lyricRomaFontSize: 18,
-    lyricFontBold: true,
+    lyricFontWeight: 700,
     useAMLyrics: false,
     useAMSpring: false,
     hidePassedLines: false,
@@ -472,6 +475,9 @@ export const useSettingStore = defineStore("setting", {
       showWhenPaused: true,
       displayMode: "name",
     },
+    playbackEngine: "web-audio",
+    customCss: "",
+    customJs: "",
   }),
   getters: {
     /**
