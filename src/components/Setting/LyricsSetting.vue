@@ -175,50 +175,34 @@
       <n-card class="set-item">
         <div class="label">
           <n-text class="name">歌词滚动位置</n-text>
-          <n-text class="tip" :depth="3">歌词高亮时所处的位置</n-text>
+          <n-text class="tip" :depth="3">歌词高亮时在屏幕中的垂直位置</n-text>
         </div>
-        <n-select
-          v-model:value="settingStore.lyricsScrollPosition"
-          :options="[
-            {
-              label: '靠近顶部',
-              value: 'start',
-            },
-            {
-              label: '水平居中',
-              value: 'center',
-            },
-          ]"
-          class="set"
-        />
-      </n-card>
-      <n-card class="set-item">
-        <div class="label">
-          <n-text class="name">自动暂停滚动</n-text>
-          <n-text class="tip" :depth="3"> 鼠标移入歌词区域时是否暂停滚动 </n-text>
-        </div>
-        <n-switch
-          v-model:value="settingStore.lrcMousePause"
-          :disabled="settingStore.useAMLyrics"
-          :round="false"
+        <n-slider
+          v-model:value="settingStore.lyricsScrollOffset"
+          :min="0.1"
+          :max="0.9"
+          :step="0.05"
+          :format-tooltip="(value: number) => `${(value * 100).toFixed(0)}%`"
+          :marks="{ '0.1': '靠上', '0.9': '靠下' }"
           class="set"
         />
       </n-card>
       <n-card class="set-item">
         <div class="label">
           <n-text class="name">显示逐字歌词</n-text>
+          <n-text class="tip" :depth="3"> 对性能要求较高，若发生卡顿请关闭 </n-text>
         </div>
         <n-switch v-model:value="settingStore.showYrc" class="set" :round="false" />
       </n-card>
-      <n-collapse-transition :show="settingStore.showYrc">
-        <n-card v-if="isElectron" class="set-item">
+      <n-collapse-transition v-if="isElectron" :show="settingStore.showYrc">
+        <n-card class="set-item">
           <div class="label">
             <n-text class="name">优先使用 QM 歌词</n-text>
             <n-text class="tip" :depth="3"> 优先从 QM 获取逐字歌词，模糊搜索，可能不准确 </n-text>
           </div>
           <n-switch v-model:value="settingStore.preferQQMusicLyric" class="set" :round="false" />
         </n-card>
-        <n-card v-if="isElectron" class="set-item">
+        <n-card class="set-item">
           <div class="label">
             <n-text class="name">本地歌曲使用 QM 歌词</n-text>
             <n-text class="tip" :depth="3">
@@ -229,18 +213,6 @@
             v-model:value="settingStore.localLyricQQMusicMatch"
             class="set"
             :round="false"
-          />
-        </n-card>
-        <n-card class="set-item">
-          <div class="label">
-            <n-text class="name">显示逐字歌词动画</n-text>
-            <n-text class="tip" :depth="3"> 可能会造成性能问题，如遇卡顿请关闭 </n-text>
-          </div>
-          <n-switch
-            v-model:value="settingStore.showYrcAnimation"
-            :disabled="settingStore.useAMLyrics"
-            :round="false"
-            class="set"
           />
         </n-card>
       </n-collapse-transition>
@@ -298,6 +270,35 @@
     </div>
     <div class="set-list">
       <n-h3 prefix="bar"> 歌词内容 </n-h3>
+      <n-card class="set-item">
+        <div class="label">
+          <n-text class="name">更喜欢繁体中文</n-text>
+          <n-text class="tip" :depth="3"> 将简体中文的歌词文本和翻译内容转换为繁体中文 </n-text>
+        </div>
+        <n-switch
+          v-model:value="settingStore.preferTraditionalChinese"
+          class="set"
+          :round="false"
+        />
+      </n-card>
+      <n-collapse-transition :show="settingStore.preferTraditionalChinese">
+        <n-card class="set-item">
+          <div class="label">
+            <n-text class="name">繁体中文变体</n-text>
+            <n-text class="tip" :depth="3"> 偏好的繁体中文变体 </n-text>
+          </div>
+          <n-select
+            v-model:value="settingStore.traditionalChineseVariant"
+            :options="[
+              { label: '繁体中文 (标准)', value: 's2t' },
+              { label: '台湾正体', value: 's2tw' },
+              { label: '香港繁体', value: 's2hk' },
+              // { label: '台湾正体 (包含词汇)', value: 's2twp' }, // 包含词汇的转换可能会导致字数发生变化，不开了
+            ]"
+            class="set"
+          />
+        </n-card>
+      </n-collapse-transition>
       <n-card class="set-item">
         <div class="label">
           <n-text class="name">
@@ -647,14 +648,14 @@
 </template>
 
 <script setup lang="ts">
-import { NFlex, NText } from "naive-ui";
-import { useSettingStore, useStatusStore } from "@/stores";
-import { cloneDeep, isEqual } from "lodash-es";
-import { isElectron } from "@/utils/env";
-import { openLyricExclude, openAMLLServer, openFontManager } from "@/utils/modal";
-import { LyricConfig } from "@/types/desktop-lyric";
-import { usePlayerController } from "@/core/player/PlayerController";
 import defaultDesktopLyricConfig from "@/assets/data/lyricConfig";
+import { usePlayerController } from "@/core/player/PlayerController";
+import { useSettingStore, useStatusStore } from "@/stores";
+import { LyricConfig } from "@/types/desktop-lyric";
+import { isElectron } from "@/utils/env";
+import { openAMLLServer, openFontManager, openLyricExclude } from "@/utils/modal";
+import { cloneDeep, isEqual } from "lodash-es";
+import { NFlex, NText } from "naive-ui";
 
 const props = defineProps<{ scrollTo?: string }>();
 

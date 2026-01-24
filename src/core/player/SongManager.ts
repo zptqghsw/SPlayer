@@ -1,7 +1,13 @@
 import { personalFm, personalFmToTrash } from "@/api/rec";
 import { songUrl, unlockSongUrl } from "@/api/song";
-import { useDataStore, useMusicStore, useSettingStore, useStatusStore } from "@/stores";
-import type { QualityType, SongType } from "@/types/main";
+import {
+  useDataStore,
+  useMusicStore,
+  useSettingStore,
+  useStatusStore,
+  useStreamingStore,
+} from "@/stores";
+import { QualityType, type SongType } from "@/types/main";
 import { isLogin } from "@/utils/auth";
 import { isElectron } from "@/utils/env";
 import { formatSongsList } from "@/utils/format";
@@ -228,6 +234,17 @@ class SongManager {
       // 本地歌曲跳过
       if (nextSong.path) return;
 
+      // 流媒体歌曲
+      if (nextSong.type === "streaming" && nextSong.streamUrl) {
+        this.nextPrefetch = {
+          id: nextSong.id,
+          url: nextSong.streamUrl,
+          isUnlocked: false,
+          quality: QualityType.SQ,
+        };
+        return this.nextPrefetch;
+      }
+
       // 在线歌曲：优先官方，其次解灰
       const songId = nextSong.type === "radio" ? nextSong.dj?.id : nextSong.id;
       if (!songId) return;
@@ -282,7 +299,7 @@ class SongManager {
     const settingStore = useSettingStore();
 
     // 本地文件直接返回
-    if (song.path) {
+    if (song.path && song.type !== "streaming") {
       // 检查本地文件是否存在
       const result = await window.electron.ipcRenderer.invoke("file-exists", song.path);
       if (!result) {
@@ -290,7 +307,21 @@ class SongManager {
         console.error("❌ 本地文件不存在");
         return { id: song.id, url: undefined };
       }
-      return { id: song.id, url: `file://${song.path}` };
+      const encodedPath = song.path.replace(/#/g, "%23").replace(/\?/g, "%3F");
+      return { id: song.id, url: `file://${encodedPath}` };
+    }
+
+    // Stream songs (Subsonic / Jellyfin)
+    if (song.type === "streaming" && song.streamUrl) {
+      const streamingStore = useStreamingStore();
+      const finalUrl = streamingStore.getSongUrl(song);
+      console.log(`🔄 [${song.id}] Stream URL:`, finalUrl);
+      return {
+        id: song.id,
+        url: finalUrl,
+        isUnlocked: false,
+        quality: song.quality || QualityType.SQ,
+      };
     }
 
     // 在线歌曲

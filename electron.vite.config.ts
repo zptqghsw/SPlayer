@@ -69,8 +69,9 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           "@": resolve(__dirname, "src/"),
-          "@native": resolve(__dirname, "native/smtc-for-splayer"),
+          "@emi": resolve(__dirname, "native/external-media-integration"),
           "@shared": resolve(__dirname, "src/types/shared.ts"),
+          "@opencc": resolve(__dirname, "native/ferrous-opencc-wasm/pkg"),
         },
       },
       css: {
@@ -102,7 +103,7 @@ export default defineConfig(({ mode }) => {
             index: resolve(__dirname, "index.html"),
             loading: resolve(__dirname, "web/loading/index.html"),
           },
-          external: ["smtc-for-splayer.node"],
+          external: ["external-media-integration.node"],
           output: {
             manualChunks: {
               stores: ["src/stores/data.ts", "src/stores/index.ts"],
