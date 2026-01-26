@@ -9,6 +9,7 @@ import { isElectron } from "@/utils/env";
 import { getPlayerInfoObj, getPlaySongData } from "@/utils/format";
 import { handleSongQuality, shuffleArray, sleep } from "@/utils/helper";
 import lastfmScrobbler from "@/utils/lastfmScrobbler";
+import { DJ_MODE_KEYWORDS } from "@/utils/meta";
 import { calculateProgress } from "@/utils/time";
 import { LyricLine } from "@applemusic-like-lyrics/lyric";
 import { DebouncedFunc, throttle } from "lodash-es";
@@ -82,6 +83,15 @@ class PlayerController {
       if (!statusStore.playStatus && !autoPlay) return;
       throw new Error("SONG_NOT_FOUND");
     }
+
+    // Fuck DJ Mode
+    if (this.shouldSkipSong(playSongData)) {
+      console.log(`[Fuck DJ] Skipping: ${playSongData.name}`);
+      window.$message.warning(`已跳过 DJ/抖音 歌曲: ${playSongData.name}`);
+      this.nextOrPrev("next");
+      return;
+    }
+
     try {
       // 停止当前播放
       audioManager.stop();
@@ -566,7 +576,10 @@ class PlayerController {
 
     // 如果没有源，尝试重新初始化当前歌曲
     if (!audioManager.src) {
-      await this.playSong({ autoPlay: true });
+      await this.playSong({
+        autoPlay: true,
+        seek: statusStore.currentTime,
+      });
       return;
     }
 
@@ -594,8 +607,6 @@ class PlayerController {
     const statusStore = useStatusStore();
     const settingStore = useSettingStore();
     const audioManager = useAudioManager();
-
-    if (!audioManager.src) return;
 
     // 计算渐出时间
     const fadeTime = settingStore.getFadeTime ? settingStore.getFadeTime / 1000 : 0;
@@ -761,6 +772,21 @@ class PlayerController {
 
     // 统一调用 audioManager
     audioManager.setRate(rate);
+  }
+
+  /**
+   * 检查是否需要跳过歌曲 (Fuck DJ Mode)
+   * @param song 歌曲信息
+   */
+  private shouldSkipSong(song: SongType): boolean {
+    const settingStore = useSettingStore();
+    if (!settingStore.disableDjMode) return false;
+    // 是否包含 DJ 关键词
+    const name = (song.name || "").toUpperCase();
+    const alia = song.alia;
+    const aliaStr = (Array.isArray(alia) ? alia.join("") : alia || "").toUpperCase();
+    const fullText = name + aliaStr;
+    return DJ_MODE_KEYWORDS.some((k) => fullText.includes(k.toUpperCase()));
   }
 
   /**

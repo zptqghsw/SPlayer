@@ -11,6 +11,7 @@ import { QualityType, type SongType } from "@/types/main";
 import { isLogin } from "@/utils/auth";
 import { isElectron } from "@/utils/env";
 import { formatSongsList } from "@/utils/format";
+import { AI_AUDIO_LEVELS } from "@/utils/meta";
 import { handleSongQuality } from "@/utils/helper";
 import { openUserLogin } from "@/utils/modal";
 
@@ -120,7 +121,13 @@ class SongManager {
    */
   public getOnlineUrl = async (id: number, isPc: boolean = false): Promise<AudioSource> => {
     const settingStore = useSettingStore();
-    const level = isPc ? "exhigh" : settingStore.songLevel;
+    let level = isPc ? "exhigh" : settingStore.songLevel;
+
+    // Fuck AI Mode: 如果开启，且请求的 level 是 AI 音质，降级为 hires
+    if (settingStore.disableAiAudio && AI_AUDIO_LEVELS.includes(level)) {
+      level = "hires";
+    }
+
     const res = await songUrl(id, level);
     console.log(`🌐 ${id} music data:`, res);
     const songData = res.data?.[0];
@@ -196,10 +203,16 @@ class SongManager {
         const unlockUrl = r.value?.result?.url;
         // 解锁成功后，触发下载
         this.triggerCacheDownload(songId, unlockUrl);
+        // 推断音质
+        let quality = QualityType.HQ;
+        if (unlockUrl && (unlockUrl.includes(".flac") || unlockUrl.includes(".wav"))) {
+            quality = QualityType.SQ;
+        }
         return {
           id: songId,
           url: unlockUrl,
           isUnlocked: true,
+          quality,
         };
       }
     }
@@ -430,6 +443,30 @@ class SongManager {
     } catch (error) {
       window.$message.error("移至垃圾桶失败，请重试");
       console.error("❌ 私人 FM 垃圾桶失败", error);
+    }
+  }
+
+  /**
+   * 刷新私人 FM
+   */
+  public async refreshPersonalFM() {
+    const musicStore = useMusicStore();
+    if (!isLogin()) {
+      window.$message.error("请先登录");
+      return;
+    }
+    try {
+      const res = await personalFm();
+      const newList = formatSongsList(res.data);
+      if (!newList || newList.length === 0) {
+        throw new Error("加载私人漫游列表失败");
+      }
+      musicStore.personalFM.list = newList;
+      musicStore.personalFM.playIndex = 0;
+      window.$message.success("刷新成功");
+    } catch (error) {
+      console.error("❌ 刷新私人 FM 失败", error);
+      window.$message.error("刷新失败，请重试");
     }
   }
 }

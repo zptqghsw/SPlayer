@@ -4,25 +4,15 @@ import type { SongLevelType } from "@/types/main";
 import { defaultAMLLDbServer } from "@/utils/meta";
 import { defineStore } from "pinia";
 import { CURRENT_SETTING_SCHEMA_VERSION, settingMigrations } from "./migrations/settingMigrations";
+import { ThemeColorType } from "@/types/color";
 
 export interface SettingState {
-  /** Schema 版本号（可选，用于数据迁移） */
+  /** Schema 版本号 */
   schemaVersion?: number;
   /** 明暗模式 */
   themeMode: "light" | "dark" | "auto";
   /** 主题类别 */
-  themeColorType:
-    | "default"
-    | "orange"
-    | "blue"
-    | "pink"
-    | "brown"
-    | "indigo"
-    | "green"
-    | "purple"
-    | "yellow"
-    | "teal"
-    | "custom";
+  themeColorType: ThemeColorType;
   /** 偏好繁体中文 */
   preferTraditionalChinese: boolean;
   /** 繁体中文变体 */
@@ -31,6 +21,8 @@ export interface SettingState {
   themeCustomColor: string;
   /** 全局着色 */
   themeGlobalColor: boolean;
+  /** 主题变体 */
+  themeVariant: "primary" | "secondary" | "tertiary" | "neutral" | "neutralVariant" | "error";
   /** 主题跟随封面 */
   themeFollowCover: boolean;
   /** 全局字体 */
@@ -69,12 +61,20 @@ export interface SettingState {
   showTran: boolean;
   /** 显示歌词音译 */
   showRoma: boolean;
+  /** 调换翻译与音译位置 */
+  swapTranRoma: boolean;
   /** 显示逐字音译 */
   showWordsRoma: boolean;
   /** 歌词位置 */
   lyricsPosition: "flex-start" | "center" | "flex-end";
   /** 歌词滚动位置偏移量 */
   lyricsScrollOffset: number;
+  /** 歌词水平位置偏移量 */
+  lyricHorizontalOffset: number;
+  /** 歌词默认靠右（对唱互换） */
+  lyricAlignRight: boolean;
+  /** 隐藏歌词括号内容和别名 */
+  hideLyricBrackets: boolean;
   /** 下载路径 */
   downloadPath: string;
   /** 是否启用缓存 */
@@ -99,6 +99,14 @@ export interface SettingState {
   usePlaybackForDownload: boolean;
   /** 保存元信息文件 */
   saveMetaFile: boolean;
+  /** 使用解锁接口下载 */
+  useUnlockForDownload: boolean;
+  /** 内嵌暂逐字歌词 (beta) */
+  downloadMakeYrc: boolean;
+  /** 下载歌词转繁体 */
+  downloadLyricToTraditional: boolean;
+  /** 下载歌词文件编码 */
+  downloadLyricEncoding: "utf-8" | "gbk" | "utf-16" | "iso-8859-1";
   /** 默认下载音质（弹窗默认选项） */
   downloadSongLevel: SongLevelType;
   /** 代理协议 */
@@ -270,6 +278,8 @@ export interface SettingState {
   enableSearchKeyword: boolean;
   /** 失焦后自动清空搜索框 */
   clearSearchOnBlur: boolean;
+  /** 显示主页问好 */
+  showHomeGreeting: boolean;
   /** 首页栏目顺序和显示配置 */
   homePageSections: Array<{
     key: "playlist" | "radar" | "artist" | "video" | "radio" | "album";
@@ -318,6 +328,10 @@ export interface SettingState {
   playerStyleRatio: number;
   /** 是否启用流媒体功能 */
   streamingEnabled: boolean;
+  /** Fuck AI: 开启后在所有的地方都不显示 Hi-res 以上的音质选项 */
+  disableAiAudio: boolean;
+  /** Fuck DJ: 开启后自动跳过 DJ 歌曲 */
+  disableDjMode: boolean;
 }
 
 export const useSettingStore = defineStore("setting", {
@@ -330,6 +344,7 @@ export const useSettingStore = defineStore("setting", {
     themeCustomColor: "#fe7971",
     themeFollowCover: false,
     themeGlobalColor: false,
+    themeVariant: "secondary",
     globalFont: "default",
     LyricFont: "follow",
     japaneseLyricFont: "follow",
@@ -398,10 +413,14 @@ export const useSettingStore = defineStore("setting", {
     showYrc: true,
     showTran: true,
     showRoma: true,
+    swapTranRoma: false,
     showWordsRoma: true,
     lyricsPosition: "flex-start",
     lyricsBlur: false,
     lyricsScrollOffset: 0.25,
+    lyricHorizontalOffset: 10,
+    lyricAlignRight: false,
+    hideLyricBrackets: false,
     enableExcludeLyrics: true,
     enableExcludeTTML: false,
     enableExcludeLocalLyrics: false,
@@ -424,6 +443,10 @@ export const useSettingStore = defineStore("setting", {
     downloadLyricTranslation: true,
     downloadLyricRomaji: false,
     usePlaybackForDownload: false,
+    useUnlockForDownload: false,
+    downloadMakeYrc: false,
+    downloadLyricToTraditional: false,
+    downloadLyricEncoding: "utf-8",
     saveMetaFile: false,
     downloadSongLevel: "h",
     proxyProtocol: "off",
@@ -450,6 +473,7 @@ export const useSettingStore = defineStore("setting", {
     },
     enableSearchKeyword: true,
     clearSearchOnBlur: false,
+    showHomeGreeting: true,
     homePageSections: [
       { key: "playlist", name: "专属歌单", visible: true, order: 0 },
       { key: "radar", name: "雷达歌单", visible: true, order: 1 },
@@ -484,6 +508,8 @@ export const useSettingStore = defineStore("setting", {
     customJs: "",
     playerStyleRatio: 50,
     streamingEnabled: false,
+    disableAiAudio: false,
+    disableDjMode: false,
   }),
   getters: {
     /**
