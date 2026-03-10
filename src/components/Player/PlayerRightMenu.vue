@@ -1,15 +1,59 @@
 <template>
   <n-flex :size="8" align="center" class="right-menu">
-    <n-badge v-if="isElectron" value="ON" :show="statusStore.showDesktopLyric">
+    <!-- 音质 -->
+    <template v-if="settingStore.showPlayerQuality">
+      <n-popselect
+        v-if="isOnlineSong"
+        v-model:show="showQualityPopover"
+        :value="currentPlayingLevel"
+        :options="qualityOptions"
+        trigger="manual"
+        placement="top"
+        @update:value="handleQualitySelect"
+        @clickoutside="handleClickOutside"
+      >
+        <template #header>
+          <n-flex class="quality-title" size="small" vertical>
+            <span class="title">音质切换</span>
+            <span class="tip">以账号具体权限为准</span>
+          </n-flex>
+        </template>
+        <div ref="qualityTagRef">
+          <n-tag
+            class="quality-tag hidden"
+            type="primary"
+            size="small"
+            @click.stop="handleQualityClick"
+          >
+            {{ getQualityName(statusStore.songQuality) }}
+          </n-tag>
+        </div>
+      </n-popselect>
+      <n-popover v-else trigger="hover" placement="top" :show-arrow="false">
+        <template #trigger>
+          <n-tag class="quality-tag hidden" type="primary" size="small">
+            {{ getQualityName(statusStore.songQuality) }}
+          </n-tag>
+        </template>
+        <span>当前歌曲不支持切换音质</span>
+      </n-popover>
+    </template>
+    <!-- 桌面歌词 -->
+    <n-badge
+      v-if="isElectron && settingStore.fullscreenPlayerElements.desktopLyric"
+      value="ON"
+      :show="statusStore.showDesktopLyric"
+      class="hidden"
+    >
       <div class="menu-icon hidden" @click.stop="player.toggleDesktopLyric()">
         <SvgIcon name="DesktopLyric2" :depth="statusStore.showDesktopLyric ? 1 : 3" />
       </div>
     </n-badge>
     <!-- 其他控制 -->
     <n-dropdown
+      v-if="settingStore.fullscreenPlayerElements.moreSettings"
       :options="controlsOptions"
       :show-arrow="false"
-      :class="{ player: statusStore.showFullPlayer }"
       @select="handleControls"
     >
       <div class="menu-icon hidden">
@@ -17,11 +61,7 @@
       </div>
     </n-dropdown>
     <!-- 音量 -->
-    <n-popover
-      :show-arrow="false"
-      :style="{ padding: 0 }"
-      :class="{ player: statusStore.showFullPlayer }"
-    >
+    <n-popover :show-arrow="false" :style="{ padding: 0 }">
       <template #trigger>
         <div class="menu-icon hidden" @click.stop="player.toggleMute" @wheel="player.setVolume">
           <SvgIcon :name="statusStore.playVolumeIcon" />
@@ -59,24 +99,60 @@
 
 <script setup lang="ts">
 import { usePlayerController } from "@/core/player/PlayerController";
-import { useDataStore, useSettingStore, useStatusStore } from "@/stores";
+import { useDataStore, useSettingStore, useStatusStore, useMusicStore } from "@/stores";
 import { isElectron } from "@/utils/env";
 import { renderIcon } from "@/utils/helper";
-import { openAutoClose, openChangeRate, openEqualizer } from "@/utils/modal";
+import { openAutoClose, openChangeRate, openEqualizer, openABLoop } from "@/utils/modal";
+import { useAudioManager } from "@/core/player/AudioManager";
 import type { DropdownOption } from "naive-ui";
+import { useQualityControl } from "@/composables/useQualityControl";
 
 const dataStore = useDataStore();
 const statusStore = useStatusStore();
 const settingStore = useSettingStore();
+const musicStore = useMusicStore();
 const player = usePlayerController();
 
+const {
+  currentPlayingLevel,
+  qualityOptions,
+  loadQualities,
+  handleQualitySelect,
+  getQualityName,
+  isOnlineSong,
+} = useQualityControl();
+
+const showQualityPopover = ref(false);
+const qualityTagRef = ref<HTMLElement | null>(null);
+
+const handleQualityClick = async () => {
+  if (showQualityPopover.value) {
+    showQualityPopover.value = false;
+  } else {
+    await loadQualities();
+    if (qualityOptions.value.length > 0) {
+      showQualityPopover.value = true;
+    }
+  }
+};
+
+// 点击外部关闭音质选择
+const handleClickOutside = (e: MouseEvent) => {
+  if (qualityTagRef.value && qualityTagRef.value.contains(e.target as Node)) {
+    return;
+  }
+  showQualityPopover.value = false;
+};
+
 // 更多功能
+const audioManager = useAudioManager();
+
 const controlsOptions = computed<DropdownOption[]>(() => [
   {
     label: "均衡器",
     key: "equalizer",
     icon: renderIcon("Eq"),
-    disabled: settingStore.playbackEngine === "mpv",
+    disabled: !audioManager.capabilities.supportsEqualizer,
   },
   {
     label: "自动关闭",
@@ -84,9 +160,14 @@ const controlsOptions = computed<DropdownOption[]>(() => [
     icon: renderIcon("TimeAuto"),
   },
   {
+    label: "AB 循环",
+    key: "abLoop",
+    icon: renderIcon("Repeat"),
+  },
+  {
     label: "播放速度",
     key: "rate",
-    disabled: settingStore.playbackEngine === "mpv",
+    disabled: !audioManager.capabilities.supportsRate,
     icon: renderIcon("PlayRate"),
   },
 ]);
@@ -95,8 +176,8 @@ const controlsOptions = computed<DropdownOption[]>(() => [
 const handleControls = (key: string) => {
   switch (key) {
     case "equalizer":
-      if (settingStore.playbackEngine === "mpv") {
-        window.$message.warning("MPV 引擎不支持均衡器功能");
+      if (!audioManager.capabilities.supportsEqualizer) {
+        window.$message.warning("当前引擎不支持均衡器功能");
         return;
       }
       openEqualizer();
@@ -104,11 +185,32 @@ const handleControls = (key: string) => {
     case "autoClose":
       openAutoClose();
       break;
+    case "abLoop":
+      openABLoop();
+      break;
     case "rate":
       openChangeRate();
       break;
   }
 };
+
+// 更新音质数据
+watch(
+  () => musicStore.playSong.id,
+  async () => {
+    statusStore.availableQualities = [];
+    await loadQualities();
+    if (showQualityPopover.value && statusStore.availableQualities.length === 0) {
+      showQualityPopover.value = false;
+    }
+  },
+);
+
+// 监听 VIP 状态或设置变化，重新加载音质
+watch([() => dataStore.userData.vipType, () => settingStore.disableAiAudio], async () => {
+  statusStore.availableQualities = [];
+  await loadQualities();
+});
 </script>
 
 <style scoped lang="scss">
@@ -143,10 +245,26 @@ const handleControls = (key: string) => {
       color: var(--primary-hex);
     }
   }
+  .quality-tag {
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
   @media (max-width: 810px) {
     .hidden {
       display: none;
     }
+  }
+}
+.quality-title {
+  .title {
+    font-size: 14px;
+    line-height: normal;
+  }
+  .tip {
+    font-size: 12px;
+    opacity: 0.6;
   }
 }
 .volume-change {
@@ -159,7 +277,6 @@ const handleControls = (key: string) => {
   .slider-num {
     margin-top: 8px;
     font-size: 13px;
-    color: var(--color);
     white-space: nowrap;
   }
 }

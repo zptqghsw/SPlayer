@@ -1,44 +1,53 @@
 import type { SongLevelType } from "@/types/main";
 import type { ImageRenderToolbarProps } from "naive-ui";
-import { compact, findKey, keys, pick, takeWhile, reduce } from "lodash-es";
+import { reduce } from "lodash-es";
 
 // 音质数据
 export const songLevelData = {
   l: {
     level: "standard",
     name: "标准音质",
+    shortName: "标准",
   },
   m: {
     level: "higher",
     name: "较高音质",
+    shortName: "高清",
   },
   h: {
     level: "exhigh",
     name: "极高音质",
+    shortName: "极高",
   },
   sq: {
     level: "lossless",
     name: "无损音质",
+    shortName: "无损",
   },
   hr: {
     level: "hires",
     name: "Hi-Res",
+    shortName: "Hi-Res",
   },
   je: {
     level: "jyeffect",
-    name: "高清环绕声",
+    name: "高清臻音",
+    shortName: "臻音",
   },
   sk: {
     level: "sky",
-    name: "沉浸环绕声",
+    name: "沉浸环绕",
+    shortName: "沉浸",
   },
   db: {
     level: "dolby",
-    name: "杜比全景声",
+    name: "杜比全景",
+    shortName: "Dolby",
   },
   jm: {
     level: "jymaster",
     name: "超清母带",
+    shortName: "母带",
   },
 };
 
@@ -51,23 +60,8 @@ export const AI_AUDIO_KEYS = ["jm", "sk", "je"];
 /** Fuck DJ Mode 关键词 */
 export const DJ_MODE_KEYWORDS = ["DJ", "抖音", "0.9", "0.8", "网红", "车载", "热歌", "慢摇"];
 
-/**
- * 根据传入的 level，筛选出包含该 level 及之前的音质数据
- * @param level 音质等级名称
- * @returns 包含指定 level 及之前音质数据的部分 songLevelData
- */
-export function getLevelsUpTo(level: string): Partial<typeof songLevelData> {
-  // 从数组中取出符合条件的所有元素
-  const resultKeys = takeWhile(
-    keys(songLevelData),
-    (key) => songLevelData[key as SongLevelType].level !== level,
-  );
-  // 包含传入的 level
-  const levelKey = findKey(songLevelData, { level });
-  if (levelKey) resultKeys.push(levelKey);
-  // 过滤空值
-  return pick(songLevelData, compact(resultKeys));
-}
+/** 歌曲脏标（Explicit Content）位掩码 */
+export const EXPLICIT_CONTENT_MARK = 1048576;
 
 /**
  * 获取音质列表
@@ -124,6 +118,8 @@ export const sortFieldOptions = {
   title: { name: "标题" },
   artist: { name: "歌手" },
   album: { name: "专辑" },
+  trackNumber: { name: "曲目序号" },
+  filename: { name: "文件名" },
   duration: { name: "时长" },
   size: { name: "大小" },
   createTime: { name: "添加时间" },
@@ -153,6 +149,7 @@ export const renderToolbar = ({ nodes }: ImageRenderToolbarProps) => {
     nodes.resizeToOriginalSize,
     nodes.zoomOut,
     nodes.zoomIn,
+    nodes.download,
     nodes.close,
   ];
 };

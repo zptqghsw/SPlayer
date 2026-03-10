@@ -36,8 +36,22 @@ export const songUrl = (
     | "hires"
     | "jyeffect"
     | "sky"
+    | "dolby"
     | "jymaster" = "exhigh",
 ) => {
+  // 杜比全景声使用旧版接口，并传入特殊参数
+  if (level === "dolby") {
+    return request({
+      url: "/song/url",
+      params: {
+        id,
+        br: 999000,
+        immerseType: "c51",
+        timestamp: Date.now(),
+      },
+    });
+  }
+
   return request({
     url: "/song/url/v1",
     params: {
@@ -156,6 +170,51 @@ export const songDynamicCover = (id: number) => {
 export const songChorus = (id: number) => {
   return request({
     url: "/song/chorus",
+    params: { id },
+  });
+};
+
+/**
+ * 歌曲百科 - 简要信息
+ * @param {number} id - 歌曲 id
+ */
+export const songWikiSummary = (id: number) => {
+  return request({
+    url: "/song/wiki/summary",
+    params: { id },
+  });
+};
+
+/**
+ * 乐谱列表
+ * @description 通过歌曲 id 获取该歌曲下的乐谱列表
+ */
+export const songSheetList = (id: number) => {
+  return request({
+    url: "/sheet/list",
+    params: { id },
+  });
+};
+
+/**
+ * 乐谱内容预览
+ * @description 通过乐谱 id 获取乐谱的完整内容
+ */
+export const songSheetPreview = (id: number) => {
+  return request({
+    url: "/sheet/preview",
+    params: { id },
+  });
+};
+
+/**
+ * 回忆坐标信息
+ * @description 获取当前歌曲的回忆坐标信息（同手机 APP 百科页的回忆坐标功能）
+ * @param id 歌曲 ID
+ */
+export const songFirstListenInfo = (id: number) => {
+  return request({
+    url: "/music/first/listen/info",
     params: { id },
   });
 };
